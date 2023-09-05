@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"unicode"
 )
 
 type ASTNode interface {
@@ -38,6 +39,7 @@ func (s *SExpr) eval() int {
 	}
 }
 
+
 type Parser struct {
 	input        string
 	currentIndex int
@@ -68,6 +70,10 @@ func (p *Parser) nextChar() bool {
 	return true
 }
 
+func (p *Parser) peekChar() byte {
+	return p.input[p.currentIndex+1]
+}
+
 func newSExpr(operand string) *SExpr {
 	return &SExpr{
 		operand: operand,
@@ -80,6 +86,18 @@ func newIntegerNode(value int) *IntegerNode {
 	return &IntegerNode{
 		value: value,
 	}
+}
+
+func (p *Parser) readIdentifier() string {
+	identifier := ""
+	for unicode.IsLower(rune(p.currentChar)) {
+		identifier += string(p.currentChar)
+		if p.peekChar() == ' ' {
+			break
+		}
+		p.nextChar()
+	}
+	return identifier
 }
 
 func (p *Parser) Parse() ASTNode {
@@ -110,6 +128,11 @@ func (p *Parser) Parse() ASTNode {
 			}
 			node = newIntegerNode(value)
 			return node
+		//case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+		//	'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_':
+		//	if p.readIdentifier() == "def" {
+		//		functionNode := newFunctionNode(p.readIdentifier())
+		//	}
 
 		default:
 			fmt.Println(string(p.currentChar))
