@@ -15,8 +15,10 @@
 - Only support two numbers, so need three registers
 - In case of an integer literal: 
     - load the value into registers X0 and X1
-    - write a mov instruction for the same
+    - push them to stack
 - In case of an sexpr:
-    - create a subroutine for the operation and then use the X0 and X1 values for the same
-    - subroutine should be stored in a different string since it should be appended to the end
+    - pre create subroutines(double generation of subroutines!!)
+    - use the assumption that the latest entries in the stack are the operands
+    - pretty much a stack virtual machine
+    - add all the subroutines to prefix
 

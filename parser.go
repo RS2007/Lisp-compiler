@@ -8,6 +8,7 @@ import (
 
 type ASTNode interface {
 	eval() int
+	codegen(asm *string)
 }
 
 type IntegerNode struct {
@@ -36,6 +37,39 @@ func (s *SExpr) eval() int {
 		return s.left.eval() / s.right.eval()
 	default:
 		panic("Should not hit here")
+	}
+}
+
+func (i *IntegerNode) codegen(asm *string){
+	*asm += fmt.Sprintf(`
+	mov X1,#%d	
+	str X1,[sp,#-16]!
+	`,i.value)
+}
+
+func (s *SExpr) codegen(asm *string){
+	s.right.codegen(asm)
+	s.left.codegen(asm)
+	*asm += `
+	ldr X0,[sp],#16
+	ldr X1,[sp],#16
+	`
+	switch s.operand {
+		case "+":
+			*asm += "bl plus"
+			*asm += `
+				
+			`
+			break
+		case "-":
+			*asm += "bl minus"
+			break
+		case "*":
+			*asm += "bl multiply"
+			break
+		case "/":
+			*asm += "bl divide"
+			break
 	}
 }
 
