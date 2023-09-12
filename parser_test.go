@@ -7,16 +7,25 @@ import (
 )
 
 func TestFunctionEval(t *testing.T) {
-	input := "(def plus_two(a) (+ a 2)) (def main() (plus_two 3) )"
-	parser := newParser(input)
-	scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
-	var evaluated int
-	expressions := parser.Parse()
-	for _, expression := range expressions {
-		evaluated = expression.eval(scope)
+	type TestCase struct {
+		input     string
+		evaluated int
 	}
-	if evaluated != 5 {
-		t.Errorf(fmt.Sprintf("Expected 5, got %d", evaluated))
+	inputs := []TestCase{
+		{input: "(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)))", evaluated: 9},
+		{input: "(def plus_two(a) (+ a 2)) (def main() (plus_two 3) )", evaluated: 5},
+		{input: "(def add_two(a b) (+ a (+ b 2))) (def main() (add_two 1 2))", evaluated: 5}}
+	for _, input := range inputs {
+		parser := newParser(input.input)
+		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
+		var evaluated int
+		expressions := parser.Parse()
+		for _, expression := range expressions {
+			evaluated = expression.eval(scope)
+		}
+		if evaluated != input.evaluated {
+			t.Errorf(fmt.Sprintf("Expected 5, got %d", evaluated))
+		}
 	}
 }
 

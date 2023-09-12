@@ -14,7 +14,7 @@ func runCommand(command []string) error {
 	return cmd.Run()
 }
 
-func writeAssembly(parser *Parser) {
+func writeArmAssembly(parser *Parser) {
 	file, e := os.Create("output.s")
 	if e != nil {
 		panic(e)
@@ -46,5 +46,38 @@ func writeAssembly(parser *Parser) {
 	}
 }
 
+func writeLLVMAssembly(asm string) {
+	file, e := os.Create("output.ll")
+	if e != nil {
+		panic(e)
+	}
+	defer file.Close()
+	writer := bufio.NewWriter(file)
+	if _, err := writer.WriteString(asm); err != nil {
+		panic(err)
+	}
+	err := writer.Flush()
+	if err != nil {
+		panic(err)
+	}
+	llvmCommand := []string{"llc", "-o", "output.s", "output.ll"}
+	compileCommand := []string{"gcc", "-o", "output", "output.s"}
+
+	if err := runCommand(llvmCommand); err != nil {
+		fmt.Println("Error running 'as' command:", err)
+		return
+	}
+
+	if err := runCommand(compileCommand); err != nil {
+		fmt.Println("Error running 'ld' command:", err)
+		return
+	}
+}
+
 func main() {
+	parser := newParser("(def main() (/ 4 2 2))")
+	asm := ""
+	symbol := "%sym1"
+	parser.ParseExpression().codegen(&asm, symbol)
+	writeLLVMAssembly(asm)
 }

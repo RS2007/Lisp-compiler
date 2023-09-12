@@ -47,7 +47,7 @@
 
 - Extend the function environment, add some variables to the inner scope and put the outer scope as the outer field, this environment should be used for the execution of the body
 
-- [ ] Cleanup parser code(on every next char, add a comment for the logic)
+- [x] Cleanup parser code(on every next char, add a comment for the logic)
 - [x] Skip whitespace implementation(and use that to reimplement parse) -> test it for some examples
 - [x] Add support for functions(parsing)
 - [ ] Add codegen for function expressions
@@ -55,3 +55,50 @@
 - [ ] Compiling Fibonacci
 - [ ] LLVM syscalls
 - [ ] Infinite locals and params
+
+## LLVM IR generation
+
+- All functions in our lisp version take in integers and returns integers
+
+### Function signature generation
+
+```lisp
+  (def add_two(a b) (+ a b 2))
+  (def main() (add_two 1 2))
+```
+
+```
+define i32 @add_two(i32 %a,i32 %b){
+  %sym1 = add i32 %a,0
+  %sym2 = add i32 %b,0
+  %sym3 = add i32 2,0
+  %sym4 = add i32 %a,%b
+  %sym5 = add i32 %sym4,%sym3
+  ret i32 %sym5
+}
+define i32 @main(){
+  %sym1 = add i32 1,0
+  %sym2 = add i32 2,0
+  %sym3 = call i32 @plus_two(i32 %sym1,i32 %sym2)
+  ret i32 %sym5
+}
+```
+
+- Need to keep track of some things
+
+  - What is the count of sym for the next local variable
+  - once these are generated, what is the mapping between the llvm variable and the variable in the lisp code(This is unnecessary since the lisp variable constraints that we have posed make them legitimate llvm variables)
+
+- How to generate and keep track of symbols
+  - Issue with codegenning for S expressions
+    - Recursive generation: say `(+ 1 (+ 1 2) 3)`
+    - codegen for the add, reserve two variables, that are the addendums and another to store the result
+      - lets say sym1, sym2 and sym3
+      - take the length of the arguments array(3 in this case)
+      - its odd and therefore the you can batch it into groups of 2 and 1
+      - sym4 the next available symbol becomes the result of the addition of the sym6 and sym7 which are the stores of the values 1 and the result of the addition of 1 and 2
+      - sym5 becomes the addition of the values 3 and 0(0 has to be added since the length is odd)
+      - sym6 will be equal to 1, since this is a simple integerNode
+      - sym7 becomes the result of the addition of 1 and 2 which are sym8 and sym9
+      - backtrack from there, sym5 = add sym 0
+      - sym7 = add sym8 sym9

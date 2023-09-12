@@ -1,7 +1,5 @@
 package main
 
-
-
 var prefix = `
 .global _start
 .align 2
@@ -35,13 +33,9 @@ var suffix = `
 	svc #0x80
 `
 
-
-
-func Codegen(root ASTNode) string{
+func Codegen(root ASTNode) string {
+	symbol := "%%sym0"
 	asm := ""
-	asm += prefix
-	root.codegen(&asm)
-	asm += suffix
+	root.codegen(&asm, symbol)
 	return asm
 }
-

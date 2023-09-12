@@ -8,7 +8,7 @@ import (
 
 type ASTNode interface {
 	eval(scope *Scope) int
-	codegen(asm *string)
+	codegen(asm *string, symbol string)
 }
 
 type IntegerNode struct {
@@ -65,6 +65,7 @@ func builtinAdd(nums []int) int {
 	}
 	return sum
 }
+
 func builtinSub(nums []int) int {
 	sum := nums[0]
 	for _, number := range nums[1:] {
@@ -72,6 +73,7 @@ func builtinSub(nums []int) int {
 	}
 	return sum
 }
+
 func builtinMul(nums []int) int {
 	sum := nums[0]
 	for _, number := range nums[1:] {
@@ -79,6 +81,7 @@ func builtinMul(nums []int) int {
 	}
 	return sum
 }
+
 func builtinDiv(nums []int) int {
 	sum := nums[0]
 	for _, number := range nums[1:] {
@@ -145,57 +148,88 @@ func (i *IdentifierNode) eval(scope *Scope) int {
 	return scope.get(i.name).eval(scope)
 }
 
-func (i *IntegerNode) codegen(asm *string) {
+func (i *IntegerNode) codegen(asm *string, symbol string) {
 	*asm += fmt.Sprintf(`
-	mov X1,#%d	
-	str X1,[sp,#-16]!
-	`, i.value)
+	%s = add i32 %d,0
+	`, symbol, i.value)
 }
 
-func (s *SExpr) codegen(asm *string) {
-	// s.right.codegen(asm)
-	// s.left.codegen(asm)
-	// *asm += `
-	// ldr X0,[sp],#16
-	// ldr X1,[sp],#16
-	// `
-	// switch s.operand {
-	// case "+":
-	//
-	//	*asm += "bl plus"
-	//	break
-	//
-	// case "-":
-	//
-	//	*asm += "bl minus"
-	//	break
-	//
-	// case "*":
-	//
-	//	*asm += "bl multiply"
-	//	break
-	//
-	// case "/":
-	//
-	//		*asm += "bl divide"
-	//		break
-	//	}
-}
-
-func (f *FunctionNode) codegen(asm *string) {
-	loadArgFromStack := ``
-	for indx := range f.arguments {
-		loadArgFromStack += fmt.Sprintf(`
-			ldr x%d,[sp,#%d]
-		`, indx, indx*8+8)
+func getMidpointIndex[T any](arr []T) int {
+	if len(arr)%2 == 0 {
+		return len(arr) / 2
+	} else {
+		return (len(arr) + 1) / 2
 	}
-	*asm += fmt.Sprintf(`
-	%s:
-		%s	
-	`, f.name, loadArgFromStack)
 }
 
-func (i *IdentifierNode) codegen(asm *string) {
+func nextSymbolGenerator() func() string {
+	count := 2
+	return func() string {
+		count += 1
+		return fmt.Sprintf("%%sym%d", count-1)
+	}
+}
+
+var generateNextSymbol = nextSymbolGenerator()
+
+var operandFunctioanMap = map[string]string{
+	"+": "add",
+	"-": "sub",
+	"*": "mul",
+	"/": "udiv",
+}
+
+func (s *SExpr) codegen(asm *string, symbol string) {
+	if Includes(builtInOperations, s.operand) {
+		if len(s.arguments) == 1 {
+			nextSymbol := generateNextSymbol()
+			s.arguments[0].codegen(asm, nextSymbol)
+			*asm += fmt.Sprintf(`
+	%s = add i32 0,%s
+			`, symbol, nextSymbol)
+			return
+		}
+		midpoint := getMidpointIndex[ASTNode](s.arguments)
+		firstHalf := s.arguments[:midpoint]
+		firstHalfSymbol := generateNextSymbol()
+		secondHalfSymbol := generateNextSymbol()
+		firstHalfSExpr := &SExpr{
+			operand:   s.operand,
+			arguments: firstHalf,
+		}
+		firstHalfSExpr.codegen(asm, firstHalfSymbol)
+		secondHalf := s.arguments[midpoint:]
+		secondHalfSExpr := &SExpr{
+			operand:   s.operand,
+			arguments: secondHalf,
+		}
+		secondHalfSExpr.codegen(asm, secondHalfSymbol)
+		*asm += fmt.Sprintf(`
+	%s = %s i32 %s,%s
+		`, symbol, operandFunctioanMap[s.operand], firstHalfSymbol, secondHalfSymbol)
+	}
+}
+
+func (f *FunctionNode) codegen(asm *string, symbol string) {
+	argumentString := "("
+	for indx, arg := range f.arguments {
+		argumentString += fmt.Sprintf(`i32 %%s`, string(arg))
+		if indx != len(f.arguments)-1 {
+			argumentString += ","
+		}
+	}
+	argumentString += ")"
+	*asm += fmt.Sprintf(`
+define i32 @%s%s{
+	`, f.name, argumentString)
+	f.body.codegen(asm, symbol)
+	*asm += fmt.Sprintf(`
+	ret i32 %s
+}
+	`, symbol)
+}
+
+func (i *IdentifierNode) codegen(asm *string, symbol string) {
 }
 
 type Parser struct {
@@ -403,10 +437,10 @@ func (p *Parser) ParseExpression() ASTNode {
 				panic("Invalid operand " + string(p.currentChar))
 			}
 		case '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
-			var value, err = strconv.Atoi(string(p.currentChar))
+			value, err := strconv.Atoi(string(p.currentChar))
 			p.nextChar()
 			for unicode.IsNumber(rune(p.currentChar)) {
-				var newValue, err = strconv.Atoi(string(p.currentChar))
+				newValue, err := strconv.Atoi(string(p.currentChar))
 				if err != nil {
 					panic(err)
 				}
@@ -449,7 +483,6 @@ func (p *Parser) Parse() []ASTNode {
 			panic(fmt.Sprintf("Expected ) got %s", string(p.currentChar)))
 		}
 		p.nextChar()
-		fmt.Println(string(p.currentChar))
 	}
 	return astNodeArray
 }
