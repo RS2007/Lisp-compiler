@@ -75,9 +75,15 @@ func writeLLVMAssembly(asm string) {
 }
 
 func main() {
-	parser := newParser("(def main() (/ 4 2 2))")
+	parser := newParser("(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 1))")
 	asm := ""
 	symbol := "%sym1"
-	parser.ParseExpression().codegen(&asm, symbol)
+	parsed := parser.Parse()
+	scope := newScope(nil)
+	for _, parsedExpr := range parsed {
+		parsedExpr.codegen(&asm, symbol, scope)
+		asm += "\n"
+	}
+	fmt.Println(asm)
 	writeLLVMAssembly(asm)
 }

@@ -14,7 +14,8 @@ func TestFunctionEval(t *testing.T) {
 	inputs := []TestCase{
 		{input: "(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)))", evaluated: 9},
 		{input: "(def plus_two(a) (+ a 2)) (def main() (plus_two 3) )", evaluated: 5},
-		{input: "(def add_two(a b) (+ a (+ b 2))) (def main() (add_two 1 2))", evaluated: 5}}
+		{input: "(def add_two(a b) (+ a (+ b 2))) (def main() (add_two 1 2))", evaluated: 5},
+	}
 	for _, input := range inputs {
 		parser := newParser(input.input)
 		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
@@ -36,8 +37,10 @@ func TestParserFunctions(t *testing.T) {
 		arguments  []string
 		bodyLength int
 	}
-	inputs := []FunctionTestCase{{input: "(def main() (+ 1 2))", name: "main", arguments: []string{}, bodyLength: 1},
-		{input: "(def plus_two (a) (+ a 2))", name: "plus_two", arguments: []string{"a"}, bodyLength: 1}}
+	inputs := []FunctionTestCase{
+		{input: "(def main() (+ 1 2))", name: "main", arguments: []string{}, bodyLength: 1},
+		{input: "(def plus_two (a) (+ a 2))", name: "plus_two", arguments: []string{"a"}, bodyLength: 1},
+	}
 	for _, input := range inputs {
 		parser := newParser(input.input)
 		node := parser.ParseExpression()
@@ -66,11 +69,13 @@ func TestParserSExpr(t *testing.T) {
 		input  string
 		output int
 	}
-	testCases := []TestCase{{
-		input: "(+ 1 2 )", output: 3,
-	},
+	testCases := []TestCase{
 		{
-			input: "(+ 1 (* 3 4 ))", output: 13},
+			input: "(+ 1 2 )", output: 3,
+		},
+		{
+			input: "(+ 1 (* 3 4 ))", output: 13,
+		},
 		{input: "(+ (/ 7 2) (* 2 3) )", output: 9},
 		{input: "(+ (/ 7 2) (* 2 3 4) )", output: 27},
 	}

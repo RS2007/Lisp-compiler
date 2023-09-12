@@ -36,6 +36,7 @@ var suffix = `
 func Codegen(root ASTNode) string {
 	symbol := "%%sym0"
 	asm := ""
-	root.codegen(&asm, symbol)
+	scope := newScope(nil)
+	root.codegen(&asm, symbol, scope)
 	return asm
 }

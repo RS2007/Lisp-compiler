@@ -8,7 +8,7 @@ import (
 
 type ASTNode interface {
 	eval(scope *Scope) int
-	codegen(asm *string, symbol string)
+	codegen(asm *string, symbol string, scope *Scope)
 }
 
 type IntegerNode struct {
@@ -148,7 +148,7 @@ func (i *IdentifierNode) eval(scope *Scope) int {
 	return scope.get(i.name).eval(scope)
 }
 
-func (i *IntegerNode) codegen(asm *string, symbol string) {
+func (i *IntegerNode) codegen(asm *string, symbol string, scope *Scope) {
 	*asm += fmt.Sprintf(`
 	%s = add i32 %d,0
 	`, symbol, i.value)
@@ -163,7 +163,7 @@ func getMidpointIndex[T any](arr []T) int {
 }
 
 func nextSymbolGenerator() func() string {
-	count := 2
+	count := 1
 	return func() string {
 		count += 1
 		return fmt.Sprintf("%%sym%d", count-1)
@@ -179,11 +179,11 @@ var operandFunctioanMap = map[string]string{
 	"/": "udiv",
 }
 
-func (s *SExpr) codegen(asm *string, symbol string) {
+func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 	if Includes(builtInOperations, s.operand) {
 		if len(s.arguments) == 1 {
 			nextSymbol := generateNextSymbol()
-			s.arguments[0].codegen(asm, nextSymbol)
+			s.arguments[0].codegen(asm, nextSymbol, scope)
 			*asm += fmt.Sprintf(`
 	%s = add i32 0,%s
 			`, symbol, nextSymbol)
@@ -197,39 +197,79 @@ func (s *SExpr) codegen(asm *string, symbol string) {
 			operand:   s.operand,
 			arguments: firstHalf,
 		}
-		firstHalfSExpr.codegen(asm, firstHalfSymbol)
+		firstHalfSExpr.codegen(asm, firstHalfSymbol, scope)
 		secondHalf := s.arguments[midpoint:]
 		secondHalfSExpr := &SExpr{
 			operand:   s.operand,
 			arguments: secondHalf,
 		}
-		secondHalfSExpr.codegen(asm, secondHalfSymbol)
+		secondHalfSExpr.codegen(asm, secondHalfSymbol, scope)
 		*asm += fmt.Sprintf(`
 	%s = %s i32 %s,%s
 		`, symbol, operandFunctioanMap[s.operand], firstHalfSymbol, secondHalfSymbol)
+		return
 	}
-}
-
-func (f *FunctionNode) codegen(asm *string, symbol string) {
+	argumentStack := make([]string, 0)
+	for _, arg := range s.arguments {
+		argumentStack = append(argumentStack, symbol)
+		arg.codegen(asm, symbol, scope)
+		symbol = generateNextSymbol()
+	}
+	function, ok := scope.get(s.operand).(*FunctionNode)
+	if !ok {
+		panic("Give function node pls")
+	}
 	argumentString := "("
-	for indx, arg := range f.arguments {
-		argumentString += fmt.Sprintf(`i32 %%s`, string(arg))
-		if indx != len(f.arguments)-1 {
+	for indx, arg := range argumentStack {
+		argumentString += fmt.Sprintf("i32 %s", arg)
+		if indx != len(function.arguments)-1 {
 			argumentString += ","
 		}
 	}
 	argumentString += ")"
 	*asm += fmt.Sprintf(`
-define i32 @%s%s{
-	`, f.name, argumentString)
-	f.body.codegen(asm, symbol)
-	*asm += fmt.Sprintf(`
-	ret i32 %s
-}
-	`, symbol)
+	%s = call i32 @%s%s
+	`, symbol, s.operand, argumentString)
 }
 
-func (i *IdentifierNode) codegen(asm *string, symbol string) {
+func (f *FunctionNode) codegen(asm *string, symbol string, scope *Scope) {
+	scope.inner[f.name] = f
+	argumentString := "("
+	generateNextSymbol = nextSymbolGenerator()
+	symbol = generateNextSymbol()
+	for indx, arg := range f.arguments {
+		argumentString += ("i32 %" + arg)
+		if indx != len(f.arguments)-1 {
+			argumentString += ","
+		}
+	}
+	argumentString += ")"
+	loadArgumentInstructions := ""
+	for _, arg := range f.arguments {
+		loadArgumentInstructions += (fmt.Sprintf(`
+	%s = add i32 `, symbol) + "%" + arg + ",0")
+		symbol = generateNextSymbol()
+	}
+	*asm += fmt.Sprintf(`
+define i32 @%s%s{
+	`, f.name, argumentString)
+	*asm += fmt.Sprintf(` 
+	%s
+	`, loadArgumentInstructions)
+	f.body.codegen(asm, symbol, scope)
+	sexpr, ok := f.body.(*SExpr)
+	if !ok {
+		panic("Here")
+	}
+	*asm += fmt.Sprintf(`
+	ret i32 %%sym%d
+}
+	`, len(sexpr.arguments)+1)
+}
+
+func (i *IdentifierNode) codegen(asm *string, symbol string, scope *Scope) {
+	*asm += fmt.Sprintf(`%s = add i32 %%`, symbol) + fmt.Sprintf(`%s,0
+	`, i.name)
 }
 
 type Parser struct {
