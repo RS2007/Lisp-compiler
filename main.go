@@ -75,7 +75,7 @@ func writeLLVMAssembly(asm string) {
 }
 
 func main() {
-	parser := newParser("(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 2))")
+	parser := newParser("(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)))")
 	asm := ""
 	symbol := "%sym1"
 	parsed := parser.Parse()
