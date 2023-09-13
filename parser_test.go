@@ -15,6 +15,9 @@ func TestFunctionEval(t *testing.T) {
 		{input: "(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)))", evaluated: 9},
 		{input: "(def plus_two(a) (+ a 2)) (def main() (plus_two 3) )", evaluated: 5},
 		{input: "(def add_two(a b) (+ a (+ b 2))) (def main() (add_two 1 2))", evaluated: 5},
+		{input: "(def main() (if (< 3 2) 1 0))", evaluated: 0},
+		{input: "(def is_small (x) (if (< x 5) 1 0))(def main() (is_small 3)", evaluated: 1},
+		{input: "(def is_small (x) (if (< x 5) 1 0))(def main() (is_small 6)", evaluated: 0},
 	}
 	for _, input := range inputs {
 		parser := newParser(input.input)
@@ -27,6 +30,39 @@ func TestFunctionEval(t *testing.T) {
 		if evaluated != input.evaluated {
 			t.Errorf(fmt.Sprintf("Expected 5, got %d", evaluated))
 		}
+	}
+}
+
+func TestParserIfExpr(t *testing.T) {
+	input := "(def main() (if (< n 2) n (+ 1 n)))"
+	parser := newParser(input)
+	function, ok := parser.ParseExpression().(*FunctionNode)
+	if !ok {
+		panic("Expected function node")
+	}
+	ifNode, ok := function.body.(*IfNode)
+	if !ok {
+		panic("Expected if node")
+	}
+	if ifNode.condition.operand != "<" {
+		t.Errorf("Expected < got %s", ifNode.condition.operand)
+	}
+	if len(ifNode.condition.arguments) != 2 {
+		t.Errorf("Error")
+	}
+	identifierTrueExp, ok := ifNode.trueExpr.(*IdentifierNode)
+	if !ok {
+		t.Errorf("Identifier needed got something else")
+	}
+	if identifierTrueExp.name != "n" {
+		t.Errorf("Expected n, got %s", identifierTrueExp.name)
+	}
+	identifierFalseExp, ok := ifNode.falseExpr.(*SExpr)
+	if identifierFalseExp.operand != "+" {
+		t.Errorf("Expected +, got %s", identifierFalseExp.operand)
+	}
+	if len(identifierFalseExp.arguments) != 2 {
+		t.Errorf("Error")
 	}
 }
 

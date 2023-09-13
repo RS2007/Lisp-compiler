@@ -31,7 +31,13 @@ type IdentifierNode struct {
 	name string
 }
 
-var builtInOperations = []string{"+", "-", "*", "/"}
+type IfNode struct {
+	condition *SExpr
+	trueExpr  ASTNode
+	falseExpr ASTNode
+}
+
+var builtInOperations = []string{"+", "-", "*", "/", "<", ">"}
 
 func Includes[T comparable](arr []T, target T) bool {
 	for _, elem := range arr {
@@ -154,6 +160,33 @@ func (i *IntegerNode) codegen(asm *string, symbol string, scope *Scope) {
 	`, symbol, i.value)
 }
 
+var comparisionOps = []string{"<", ">"}
+
+func (i *IfNode) eval(scope *Scope) int {
+	if !Includes(comparisionOps, i.condition.operand) {
+		panic("Should have a comparision operator in if condition")
+	}
+	if len(i.condition.arguments) != 2 {
+		panic("Conditional operators are binary")
+	}
+	var isCondTrue bool
+	switch i.condition.operand {
+	case "<":
+		isCondTrue = i.condition.arguments[0].eval(scope) < i.condition.arguments[1].eval(scope)
+		break
+	case ">":
+		isCondTrue = i.condition.arguments[0].eval(scope) < i.condition.arguments[1].eval(scope)
+		break
+	default:
+		panic("Error")
+	}
+	if isCondTrue {
+		return i.trueExpr.eval(scope)
+	} else {
+		return i.falseExpr.eval(scope)
+	}
+}
+
 func getMidpointIndex[T any](arr []T) int {
 	if len(arr)%2 == 0 {
 		return len(arr) / 2
@@ -271,6 +304,9 @@ func (i *IdentifierNode) codegen(asm *string, symbol string, scope *Scope) {
 	`, i.name)
 }
 
+func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
+}
+
 type Parser struct {
 	input        string
 	currentIndex int
@@ -345,18 +381,24 @@ func (p *Parser) parseFunctionBody() ASTNode {
 		return nil
 	}
 	p.skipWhitespace()
-	var sexpr *SExpr
+	var expr ASTNode
 	for peekedChar == '(' {
-		sexpr, ok = p.ParseExpression().(*SExpr)
-		if !ok {
+		switch parsed := p.ParseExpression().(type) {
+		case *SExpr:
+			{
+				expr = parsed
+				return parsed
+			}
+		case *IfNode:
+			{
+				expr = parsed
+				return parsed
+			}
+		default:
 			return nil
 		}
-		peekedChar, ok = p.peekChar()
-		if !ok {
-			return sexpr
-		}
 	}
-	return sexpr
+	return expr
 }
 
 func (p *Parser) parseFunctionArguments() []string {
@@ -445,7 +487,7 @@ func (p *Parser) ParseExpression() ASTNode {
 			// An identifier is now read and then two subsequent s expressions are parsed
 			switch p.currentChar {
 			case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-				'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_', '+', '-', '*', '/':
+				'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_', '+', '-', '*', '/', '<', '>':
 				identifier := p.readIdentifier()
 				if identifier == "def" {
 					// Implies this is a function defn
@@ -463,6 +505,29 @@ func (p *Parser) ParseExpression() ASTNode {
 					// parse the body(parse an s expression)
 					functionNode.body = p.parseFunctionBody()
 					return functionNode
+				}
+				if identifier == "if" {
+					p.skipWhitespace()
+					if p.currentChar != '(' {
+						panic(fmt.Sprintf("Expected ( got %s", string(p.currentChar)))
+					}
+					condition, ok := p.ParseExpression().(*SExpr)
+					if !ok {
+						panic("Error")
+					}
+					p.skipWhitespace()
+					trueExpr := p.ParseExpression()
+					p.skipWhitespace()
+					falseExpr := p.ParseExpression()
+					if p.currentChar != ')' {
+						panic(fmt.Sprintf("Expected ) got %s", string(p.currentChar)))
+					}
+					p.nextChar()
+					return &IfNode{
+						condition,
+						trueExpr,
+						falseExpr,
+					}
 				}
 				sexpr := newSExpr(identifier)
 				p.skipWhitespace()
@@ -500,7 +565,7 @@ func (p *Parser) ParseExpression() ASTNode {
 		case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
 			'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_':
 			ident := p.readIdentifier()
-			if p.currentChar != ' ' {
+			if p.currentChar != ' ' && p.currentChar != ')' {
 				panic("Should be a ' ' here")
 			}
 			p.skipWhitespace()
