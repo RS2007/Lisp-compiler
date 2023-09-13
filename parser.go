@@ -209,12 +209,15 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		`, symbol, operandFunctioanMap[s.operand], firstHalfSymbol, secondHalfSymbol)
 		return
 	}
+	currentSymbol := symbol
+	symbol = generateNextSymbol()
 	argumentStack := make([]string, 0)
 	for _, arg := range s.arguments {
 		argumentStack = append(argumentStack, symbol)
 		arg.codegen(asm, symbol, scope)
 		symbol = generateNextSymbol()
 	}
+	fmt.Printf("%v", argumentStack)
 	function, ok := scope.get(s.operand).(*FunctionNode)
 	if !ok {
 		panic("Give function node pls")
@@ -229,7 +232,7 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 	argumentString += ")"
 	*asm += fmt.Sprintf(`
 	%s = call i32 @%s%s
-	`, symbol, s.operand, argumentString)
+	`, currentSymbol, s.operand, argumentString)
 }
 
 func (f *FunctionNode) codegen(asm *string, symbol string, scope *Scope) {
@@ -257,14 +260,10 @@ define i32 @%s%s{
 	%s
 	`, loadArgumentInstructions)
 	f.body.codegen(asm, symbol, scope)
-	sexpr, ok := f.body.(*SExpr)
-	if !ok {
-		panic("Here")
-	}
 	*asm += fmt.Sprintf(`
 	ret i32 %%sym%d
 }
-	`, len(sexpr.arguments)+1)
+	`, len(f.arguments)+1)
 }
 
 func (i *IdentifierNode) codegen(asm *string, symbol string, scope *Scope) {
