@@ -123,7 +123,7 @@ func (s *SExpr) eval(scope *Scope) int {
 	}
 	extendedEnv := newScope(scope)
 	for indx := range s.arguments {
-		extendedEnv.inner[function.arguments[indx]] = s.arguments[indx]
+		extendedEnv.inner[function.arguments[indx]] = &IntegerNode{value: s.arguments[indx].eval(scope)}
 	}
 
 	return applyFunction(function, extendedEnv)
@@ -178,7 +178,7 @@ func (i *IfNode) eval(scope *Scope) int {
 		isCondTrue = i.condition.arguments[0].eval(scope) < i.condition.arguments[1].eval(scope)
 		break
 	case ">":
-		isCondTrue = i.condition.arguments[0].eval(scope) < i.condition.arguments[1].eval(scope)
+		isCondTrue = i.condition.arguments[0].eval(scope) > i.condition.arguments[1].eval(scope)
 		break
 	default:
 		panic("Error")

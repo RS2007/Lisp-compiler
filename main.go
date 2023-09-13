@@ -79,7 +79,7 @@ func main() {
 	interpret := false
 	flag.BoolVar(&interpret, "interpret", false, "Run as interpreter, default false")
 	flag.Parse()
-	parser := newParser("(def is_small (x) (if (< x 5) 1 0))(def main() (is_small 88)")
+	parser := newParser(`(def fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))) (def main () (fib 8))`)
 	asm := ""
 	symbol := "%sym1"
 	parsed := parser.Parse()

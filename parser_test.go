@@ -18,6 +18,7 @@ func TestFunctionEval(t *testing.T) {
 		{input: "(def main() (if (< 3 2) 1 0))", evaluated: 0},
 		{input: "(def is_small (x) (if (< x 5) 1 0))(def main() (is_small 3)", evaluated: 1},
 		{input: "(def is_small (x) (if (< x 5) 1 0))(def main() (is_small 6)", evaluated: 0},
+		{input: "(def fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))) (def main () (fib 8))", evaluated: 21},
 	}
 	for _, input := range inputs {
 		parser := newParser(input.input)
