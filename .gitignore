@@ -4,3 +4,4 @@
 output
 .vscode
 *.ll
+lisp-compiler

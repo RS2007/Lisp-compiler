@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,15 +76,27 @@ func writeLLVMAssembly(asm string) {
 }
 
 func main() {
+  interpret := false
+  flag.BoolVar(&interpret,"interpret",false,"Run as interpreter, default false")
+  flag.Parse()
 	parser := newParser("(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)))")
 	asm := ""
 	symbol := "%sym1"
 	parsed := parser.Parse()
 	scope := newScope(nil)
-	for _, parsedExpr := range parsed {
-		parsedExpr.codegen(&asm, symbol, scope)
-		asm += "\n"
-	}
-	fmt.Println(asm)
-	writeLLVMAssembly(asm)
+  if(interpret){
+    var value int
+    for _,parsedExpr := range parsed {
+      value = parsedExpr.eval(scope)
+    }
+    fmt.Println(value)
+    return
+  }else{
+    for _, parsedExpr := range parsed {
+      parsedExpr.codegen(&asm, symbol, scope)
+      asm += "\n"
+    }
+    fmt.Println(asm)
+    writeLLVMAssembly(asm)
+  }
 }
