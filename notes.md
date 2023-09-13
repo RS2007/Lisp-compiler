@@ -50,8 +50,8 @@
 - [x] Cleanup parser code(on every next char, add a comment for the logic)
 - [x] Skip whitespace implementation(and use that to reimplement parse) -> test it for some examples
 - [x] Add support for functions(parsing)
-- [ ] Add codegen for function expressions
-- [ ] Support LLVM IR
+- [x] Add codegen for function expressions
+- [x] Support LLVM IR
 - [ ] Compiling Fibonacci
 - [ ] LLVM syscalls
 - [ ] Infinite locals and params
@@ -102,3 +102,8 @@ define i32 @main(){
       - sym7 becomes the result of the addition of 1 and 2 which are sym8 and sym9
       - backtrack from there, sym5 = add sym 0
       - sym7 = add sym8 sym9
+
+### Conditional codegeneration
+
+- Have to push value to stack(local storage), cause llvm does'nt allow multiple assignment
+- alloca instruction, store and load

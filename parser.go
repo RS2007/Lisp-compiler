@@ -160,7 +160,10 @@ func (i *IntegerNode) codegen(asm *string, symbol string, scope *Scope) {
 	`, symbol, i.value)
 }
 
-var comparisionOps = []string{"<", ">"}
+var (
+	comparisionOps = []string{"<", ">"}
+	arithmeticOps  = []string{"+", "-", "*", "/"}
+)
 
 func (i *IfNode) eval(scope *Scope) int {
 	if !Includes(comparisionOps, i.condition.operand) {
@@ -213,7 +216,7 @@ var operandFunctioanMap = map[string]string{
 }
 
 func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
-	if Includes(builtInOperations, s.operand) {
+	if Includes(arithmeticOps, s.operand) {
 		if len(s.arguments) == 1 {
 			nextSymbol := generateNextSymbol()
 			s.arguments[0].codegen(asm, nextSymbol, scope)
@@ -240,6 +243,30 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		*asm += fmt.Sprintf(`
 	%s = %s i32 %s,%s
 		`, symbol, operandFunctioanMap[s.operand], firstHalfSymbol, secondHalfSymbol)
+		return
+	}
+	if Includes(comparisionOps, s.operand) {
+		if len(s.arguments) != 2 {
+			panic("Error: comparision operators can have only two arguments")
+		}
+		var compareInstr string
+		switch s.operand {
+		case "<":
+			compareInstr = "slt"
+			break
+		case ">":
+			compareInstr = "sgt"
+			break
+		default:
+			panic("Error")
+		}
+		arg1Symbol := generateNextSymbol()
+		arg2Symbol := generateNextSymbol()
+		s.arguments[0].codegen(asm, arg1Symbol, scope)
+		s.arguments[1].codegen(asm, arg2Symbol, scope)
+		*asm += fmt.Sprintf(`
+	%s = icmp %s i32 %s , %s
+		`, symbol, compareInstr, arg1Symbol, arg2Symbol)
 		return
 	}
 	currentSymbol := symbol
@@ -305,6 +332,35 @@ func (i *IdentifierNode) codegen(asm *string, symbol string, scope *Scope) {
 }
 
 func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
+	allocVariable := generateNextSymbol()
+	*asm += fmt.Sprintf(`
+	%s = alloca i32, align 4
+	`, allocVariable)
+	conditionSymbol := generateNextSymbol()
+	i.condition.codegen(asm, conditionSymbol, scope)
+	*asm += fmt.Sprintf(`
+	br i1 %s,label %%iftrue,label %%iffalse
+	iftrue:
+	`, conditionSymbol)
+	trueSymbol := generateNextSymbol()
+	falseSymbol := generateNextSymbol()
+	i.trueExpr.codegen(asm, trueSymbol, scope)
+	*asm += fmt.Sprintf(`
+		store i32 %s, i32* %s, align 4
+		br label %%ifresult
+	`, trueSymbol, allocVariable)
+	*asm += fmt.Sprintf(`
+	iffalse:
+	`)
+	i.falseExpr.codegen(asm, falseSymbol, scope)
+	*asm += fmt.Sprintf(`
+		store i32 %s, i32* %s, align 4
+		br label %%ifresult
+	`, falseSymbol, allocVariable)
+	*asm += fmt.Sprintf(`
+	ifresult:
+		%s = load i32,i32* %s, align 4
+	`, symbol, allocVariable)
 }
 
 type Parser struct {
