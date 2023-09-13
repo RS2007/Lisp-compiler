@@ -1,5 +1,5 @@
 # Lisp-compiler
-Learning about llvm ir by building a lisp compiler targetting x86
+Learning about llvm ir by building a lisp compiler
 
 ## Current progress
 
