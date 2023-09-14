@@ -3,7 +3,7 @@
 - Learning about llvm ir by building a lisp compiler.
 - Currently supports an interpret and compile mode.
   - Interpret runs a tree walking interpreter on the AST.
-  - Compileer generates LLVM IR thats compiled using LLVM's `llc` to generate an executable
+  - Compiler generates LLVM IR thats compiled using LLVM's `llc` to generate an executable
 - Handwritten lexer+parser
 
 ## Prerequisites
@@ -31,4 +31,8 @@
 
 ### Demo
 
-https://github.com/RS2007/Lisp-compiler/assets/83483297/19021ee7-b622-4c4e-8386-47015c78e32f
+
+
+
+https://github.com/RS2007/Lisp-compiler/assets/83483297/d844cdf1-64ee-46ef-ad99-fd742db9fe9e
+
