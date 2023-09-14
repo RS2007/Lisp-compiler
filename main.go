@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func runCommand(command []string) error {
@@ -75,16 +75,44 @@ func writeLLVMAssembly(asm string) {
 	}
 }
 
+func loadLispFileToString(fileName string) (string, error) {
+	// Read the file into a byte slice
+	fileContents, err := os.ReadFile(fileName)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(fileContents)), nil
+}
+
 func main() {
-	interpret := false
-	flag.BoolVar(&interpret, "interpret", false, "Run as interpreter, default false")
-	flag.Parse()
-	parser := newParser(`(def fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))) (def main () (fib 8))`)
+	if len(os.Args) < 2 {
+		fmt.Println(`
+			Usage: lisp-compiler <mode> <input-path>
+			mode: interpret,compile, default: compile
+		`)
+		return
+	}
+	var input string
+	var err error
+	var mode string
+	if len(os.Args) == 3 {
+		mode = os.Args[1]
+		input, err = loadLispFileToString(strings.TrimSpace(os.Args[2]))
+	}
+	if len(os.Args) == 2 {
+		mode = "compile"
+		input, err = loadLispFileToString(strings.TrimSpace(os.Args[1]))
+	}
+	if err != nil {
+		panic(err)
+	}
+	parser := newParser(input)
 	asm := ""
 	symbol := "%sym1"
 	parsed := parser.Parse()
 	scope := newScope(nil)
-	if interpret {
+	if mode == "interpret" {
 		var value int
 		for _, parsedExpr := range parsed {
 			value = parsedExpr.eval(scope)
@@ -96,7 +124,6 @@ func main() {
 			parsedExpr.codegen(&asm, symbol, scope)
 			asm += "\n"
 		}
-		fmt.Println(asm)
 		writeLLVMAssembly(asm)
 	}
 }

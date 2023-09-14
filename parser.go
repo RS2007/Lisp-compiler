@@ -277,7 +277,6 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		arg.codegen(asm, symbol, scope)
 		symbol = generateNextSymbol()
 	}
-	fmt.Printf("%v", argumentStack)
 	function, ok := scope.get(s.operand).(*FunctionNode)
 	if !ok {
 		panic("Give function node pls")
@@ -381,7 +380,7 @@ func newParser(input string) *Parser {
 var whiteSpaceChars = []rune{'\n', '\r', '\t', ' '}
 
 func (p *Parser) skipWhitespace() {
-	for Includes(whiteSpaceChars, rune(p.currentChar)) && p.currentIndex < len(p.input) {
+	for Includes(whiteSpaceChars, rune(p.currentChar)) && p.currentIndex < len(p.input)-1 {
 		p.currentIndex += 1
 		p.currentChar = p.input[p.currentIndex]
 	}
