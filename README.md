@@ -5,6 +5,7 @@
   - Interpret runs a tree walking interpreter on the AST.
   - Compiler generates LLVM IR thats compiled using LLVM's `llc` to generate an executable
 - Handwritten lexer+parser
+- Supports the write syscall for Mac M2 AArch64 platform (Others to be added in due course)
 
 ## Prerequisites
 
@@ -28,8 +29,14 @@
 - If expressions
 - Integer data structures & arithmetic and comparision operators on them
 - Interpret and compile modes
-- Write Syscall working
+- Write Syscall support
+
+> Write syscall does'nt work with the interpret mode, since references are implemented only for LLVM IR. Instead to print just return the value from the function and subsequently main.
 
 ### Demo
 
-https://github.com/RS2007/Lisp-compiler/assets/83483297/d844cdf1-64ee-46ef-ad99-fd742db9fe9e
+
+https://github.com/RS2007/Lisp-compiler/assets/83483297/4f94ba7f-a707-4663-805e-02c029c435e1
+
+
+
