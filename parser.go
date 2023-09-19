@@ -638,13 +638,11 @@ func (p *Parser) ParseExpression() ASTNode {
 					trueExpr := p.ParseExpression()
 					p.skipWhitespace()
 					var falseExpr ASTNode
-					fmt.Println("Before ", string(p.currentChar))
 					if p.currentChar == '(' || unicode.IsDigit(rune(p.currentChar)) {
 						falseExpr = p.ParseExpression()
 					} else {
 						falseExpr = nil
 					}
-					fmt.Println("After ", string(p.currentChar))
 					if p.currentChar != ')' {
 						panic(fmt.Sprintf("Expected ) got %s", string(p.currentChar)))
 					}
@@ -713,7 +711,6 @@ func (p *Parser) Parse() []ASTNode {
 	for !p.isEndOfInput() {
 		astNodeArray = append(astNodeArray, p.ParseExpression())
 		p.skipWhitespace()
-		fmt.Println(string(p.currentChar))
 	}
 	return astNodeArray
 }
