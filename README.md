@@ -28,6 +28,7 @@
 - If expressions
 - Integer data structures & arithmetic and comparision operators on them
 - Interpret and compile modes
+- Write Syscall working
 
 ### Demo
 

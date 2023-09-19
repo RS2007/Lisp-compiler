@@ -12,7 +12,7 @@ func TestFunctionEval(t *testing.T) {
 		evaluated int
 	}
 	inputs := []TestCase{
-		{input: "(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)))", evaluated: 9},
+		{input: "(def plus-two (a b) (+ a (+ b 2))) (def main () (plus-two 3 (plus-two 1 1)) 0)", evaluated: 0},
 		{input: "(def plus_two(a) (+ a 2)) (def main() (plus_two 3) )", evaluated: 5},
 		{input: "(def add_two(a b) (+ a (+ b 2))) (def main() (add_two 1 2))", evaluated: 5},
 		{input: "(def main() (if (< 3 2) 1 0))", evaluated: 0},
@@ -41,7 +41,7 @@ func TestParserIfExpr(t *testing.T) {
 	if !ok {
 		panic("Expected function node")
 	}
-	ifNode, ok := function.body.(*IfNode)
+	ifNode, ok := function.body[0].(*IfNode)
 	if !ok {
 		panic("Expected if node")
 	}

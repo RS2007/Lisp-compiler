@@ -107,3 +107,10 @@ define i32 @main(){
 
 - Have to push value to stack(local storage), cause llvm does'nt allow multiple assignment
 - alloca instruction, store and load
+
+### Printing error
+
+- [ ] support for array of SExpr in the function body
+- [ ] Parser is extremely shady, fix parser
+  - [ ] The `parseFunctionBody` method on the parser is extremely shady(poor implementation) , need to fix it
+  - [ ] Fix other shabby parts of the code, add good asserts and code comments and unit tests

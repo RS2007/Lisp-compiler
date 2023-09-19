@@ -23,7 +23,7 @@ type SExpr struct {
 type FunctionNode struct {
 	name      string
 	arguments []string
-	body      ASTNode
+	body      []ASTNode
 	scope     *Scope
 }
 
@@ -37,7 +37,11 @@ type IfNode struct {
 	falseExpr ASTNode
 }
 
-var builtInOperations = []string{"+", "-", "*", "/", "<", ">"}
+type ReferenceNode struct {
+	value ASTNode
+}
+
+var builtInOperations = []string{"+", "-", "*", "/", "%", "<", ">", "=", "&", "sys_write"}
 
 func Includes[T comparable](arr []T, target T) bool {
 	for _, elem := range arr {
@@ -106,7 +110,11 @@ func evalBuiltin(operand string, arguments []ASTNode, scope *Scope) int {
 }
 
 func applyFunction(function *FunctionNode, functionEnv *Scope) int {
-	return function.body.eval(functionEnv)
+	value := 0
+	for _, expr := range function.body {
+		value = expr.eval(functionEnv)
+	}
+	return value
 }
 
 func (s *SExpr) eval(scope *Scope) int {
@@ -131,10 +139,17 @@ func (s *SExpr) eval(scope *Scope) int {
 
 func (f *FunctionNode) eval(scope *Scope) int {
 	scope.inner[f.name] = f
+	value := 0
 	if f.name == "main" {
-		return f.body.eval(scope)
+		for _, expr := range f.body {
+			value = expr.eval(scope)
+		}
 	}
-	return 0
+	return value
+}
+
+func (r *ReferenceNode) eval(scope *Scope) int {
+	panic("Interpreter does not support references")
 }
 
 func (s *Scope) get(variable string) ASTNode {
@@ -156,13 +171,14 @@ func (i *IdentifierNode) eval(scope *Scope) int {
 
 func (i *IntegerNode) codegen(asm *string, symbol string, scope *Scope) {
 	*asm += fmt.Sprintf(`
-	%s = add i32 %d,0
+	%s = add i64 %d,0
 	`, symbol, i.value)
 }
 
 var (
-	comparisionOps = []string{"<", ">"}
-	arithmeticOps  = []string{"+", "-", "*", "/"}
+	comparisionOps = []string{"<", ">", "="}
+	arithmeticOps  = []string{"+", "-", "*", "/", "%"}
+	systemCalls    = []string{"sys_write"}
 )
 
 func (i *IfNode) eval(scope *Scope) int {
@@ -179,6 +195,9 @@ func (i *IfNode) eval(scope *Scope) int {
 		break
 	case ">":
 		isCondTrue = i.condition.arguments[0].eval(scope) > i.condition.arguments[1].eval(scope)
+		break
+	case "=":
+		isCondTrue = i.condition.arguments[0].eval(scope) == i.condition.arguments[1].eval(scope)
 		break
 	default:
 		panic("Error")
@@ -213,6 +232,7 @@ var operandFunctioanMap = map[string]string{
 	"-": "sub",
 	"*": "mul",
 	"/": "udiv",
+	"%": "urem",
 }
 
 func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
@@ -221,7 +241,7 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 			nextSymbol := generateNextSymbol()
 			s.arguments[0].codegen(asm, nextSymbol, scope)
 			*asm += fmt.Sprintf(`
-	%s = add i32 0,%s
+	%s = add i64 0,%s
 			`, symbol, nextSymbol)
 			return
 		}
@@ -241,7 +261,7 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		}
 		secondHalfSExpr.codegen(asm, secondHalfSymbol, scope)
 		*asm += fmt.Sprintf(`
-	%s = %s i32 %s,%s
+	%s = %s i64 %s,%s
 		`, symbol, operandFunctioanMap[s.operand], firstHalfSymbol, secondHalfSymbol)
 		return
 	}
@@ -257,6 +277,9 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		case ">":
 			compareInstr = "sgt"
 			break
+		case "=":
+			compareInstr = "eq"
+			break
 		default:
 			panic("Error")
 		}
@@ -265,8 +288,36 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		s.arguments[0].codegen(asm, arg1Symbol, scope)
 		s.arguments[1].codegen(asm, arg2Symbol, scope)
 		*asm += fmt.Sprintf(`
-	%s = icmp %s i32 %s , %s
+	%s = icmp %s i64 %s , %s
 		`, symbol, compareInstr, arg1Symbol, arg2Symbol)
+		return
+	}
+	if Includes(systemCalls, s.operand) {
+		outFd, ok := s.arguments[0].(*IntegerNode)
+		outFdSymbol := generateNextSymbol()
+		if !ok {
+			panic("Expected Integer")
+		}
+		referenceNode, ok := s.arguments[1].(*ReferenceNode)
+		referenceSymbol := generateNextSymbol()
+		if !ok {
+			panic("Expected Reference")
+		}
+		charNum, ok := s.arguments[2].(*IntegerNode)
+		charNumSymbol := generateNextSymbol()
+		outFd.codegen(asm, outFdSymbol, scope)
+		referenceNode.codegen(asm, referenceSymbol, scope)
+		charNum.codegen(asm, charNumSymbol, scope)
+		if !ok {
+			panic("Expected Integer")
+		}
+		pointerToIntSymbol := generateNextSymbol()
+		syscallNumSymbol := generateNextSymbol()
+		*asm += fmt.Sprintf(`
+			%s = ptrtoint i64* %s to i64
+			%s = add i64 4,0
+			%s = call i64 asm sideeffect "svc #0x80","=r,{x0},{x1},{x2},{x16}" (i64 %s,i64 %s,i64 %s,i64 %s)
+		`, pointerToIntSymbol, referenceSymbol, syscallNumSymbol, symbol, outFdSymbol, pointerToIntSymbol, charNumSymbol, syscallNumSymbol)
 		return
 	}
 	currentSymbol := symbol
@@ -279,18 +330,18 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 	}
 	function, ok := scope.get(s.operand).(*FunctionNode)
 	if !ok {
-		panic("Give function node pls")
+		panic(fmt.Sprintf("Give function node pls: %s", s.operand))
 	}
 	argumentString := "("
 	for indx, arg := range argumentStack {
-		argumentString += fmt.Sprintf("i32 %s", arg)
+		argumentString += fmt.Sprintf("i64 %s", arg)
 		if indx != len(function.arguments)-1 {
 			argumentString += ","
 		}
 	}
 	argumentString += ")"
 	*asm += fmt.Sprintf(`
-	%s = call i32 @%s%s
+	%s = call i64 @%s%s
 	`, currentSymbol, s.operand, argumentString)
 }
 
@@ -300,7 +351,7 @@ func (f *FunctionNode) codegen(asm *string, symbol string, scope *Scope) {
 	generateNextSymbol = nextSymbolGenerator()
 	symbol = generateNextSymbol()
 	for indx, arg := range f.arguments {
-		argumentString += ("i32 %" + arg)
+		argumentString += ("i64 %" + arg)
 		if indx != len(f.arguments)-1 {
 			argumentString += ","
 		}
@@ -309,31 +360,39 @@ func (f *FunctionNode) codegen(asm *string, symbol string, scope *Scope) {
 	loadArgumentInstructions := ""
 	for _, arg := range f.arguments {
 		loadArgumentInstructions += (fmt.Sprintf(`
-	%s = add i32 `, symbol) + "%" + arg + ",0")
+	%s = add i64 `, symbol) + "%" + arg + ",0")
 		symbol = generateNextSymbol()
 	}
 	*asm += fmt.Sprintf(`
-define i32 @%s%s{
+define i64 @%s%s{
 	`, f.name, argumentString)
 	*asm += fmt.Sprintf(` 
 	%s
 	`, loadArgumentInstructions)
-	f.body.codegen(asm, symbol, scope)
+	for i, expr := range f.body {
+		var symbolForExpression string // symbol for each expression in the function body, the last statement should use the main symbol(cause thats what gets returned) and the subsidiaries should use a new symbol
+		if i == len(f.body)-1 {
+			symbolForExpression = symbol
+		} else {
+			symbolForExpression = generateNextSymbol()
+		}
+		expr.codegen(asm, symbolForExpression, scope)
+	}
 	*asm += fmt.Sprintf(`
-	ret i32 %%sym%d
+	ret i64 %%sym%d
 }
 	`, len(f.arguments)+1)
 }
 
 func (i *IdentifierNode) codegen(asm *string, symbol string, scope *Scope) {
-	*asm += fmt.Sprintf(`%s = add i32 %%`, symbol) + fmt.Sprintf(`%s,0
+	*asm += fmt.Sprintf(`%s = add i64 %%`, symbol) + fmt.Sprintf(`%s,0
 	`, i.name)
 }
 
 func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
 	allocVariable := generateNextSymbol()
 	*asm += fmt.Sprintf(`
-	%s = alloca i32, align 4
+	%s = alloca i64, align 4
 	`, allocVariable)
 	conditionSymbol := generateNextSymbol()
 	i.condition.codegen(asm, conditionSymbol, scope)
@@ -345,7 +404,7 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
 	falseSymbol := generateNextSymbol()
 	i.trueExpr.codegen(asm, trueSymbol, scope)
 	*asm += fmt.Sprintf(`
-		store i32 %s, i32* %s, align 4
+		store i64 %s, i64* %s, align 4
 		br label %%ifresult
 	`, trueSymbol, allocVariable)
 	*asm += fmt.Sprintf(`
@@ -353,13 +412,22 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
 	`)
 	i.falseExpr.codegen(asm, falseSymbol, scope)
 	*asm += fmt.Sprintf(`
-		store i32 %s, i32* %s, align 4
+		store i64 %s, i64* %s, align 4
 		br label %%ifresult
 	`, falseSymbol, allocVariable)
 	*asm += fmt.Sprintf(`
 	ifresult:
-		%s = load i32,i32* %s, align 4
+		%s = load i64,i64* %s, align 4
 	`, symbol, allocVariable)
+}
+
+func (r *ReferenceNode) codegen(asm *string, symbol string, scope *Scope) {
+	valueSymbol := generateNextSymbol()
+	r.value.codegen(asm, valueSymbol, scope)
+	*asm += fmt.Sprintf(`
+	%s = alloca i64, align 4
+	store i64 %s,i64* %s,align 4
+	`, symbol, valueSymbol, symbol)
 }
 
 type Parser struct {
@@ -419,41 +487,23 @@ func (p *Parser) parseSExprArgs() []ASTNode {
 	return parsedArgs
 }
 
-func (p *Parser) parseFunctionBody() ASTNode {
-	peekedChar, ok := p.peekChar()
-	if !ok {
-		return nil
-	}
-	for (peekedChar != '(' && p.currentChar == ' ') || (p.currentChar == ')') {
-		p.nextChar()
-		peekedChar, ok = p.peekChar()
-		if !ok {
-			return nil
+func (p *Parser) parseFunctionBody() []ASTNode {
+	bodyExpressions := make([]ASTNode, 0)
+	p.nextChar() // To go from the closing parans of the arguments array
+	// Can either be at a whitespace or at a (, skip whitespace and assert
+	for p.currentChar != ')' {
+		p.skipWhitespace()
+		if p.currentChar == '(' {
+			if p.currentChar != '(' {
+				panic(fmt.Sprintf("Expected ( got %s", string(p.currentChar)))
+			}
+			bodyExpressions = append(bodyExpressions, p.ParseExpression())
+			p.skipWhitespace()
+		} else {
+			bodyExpressions = append(bodyExpressions, p.ParseExpression())
 		}
 	}
-	peekedChar, ok = p.peekChar()
-	if !ok {
-		return nil
-	}
-	p.skipWhitespace()
-	var expr ASTNode
-	for peekedChar == '(' {
-		switch parsed := p.ParseExpression().(type) {
-		case *SExpr:
-			{
-				expr = parsed
-				return parsed
-			}
-		case *IfNode:
-			{
-				expr = parsed
-				return parsed
-			}
-		default:
-			return nil
-		}
-	}
-	return expr
+	return bodyExpressions
 }
 
 func (p *Parser) parseFunctionArguments() []string {
@@ -509,6 +559,12 @@ func newIdentifierNode(name string) *IdentifierNode {
 	}
 }
 
+func newReferenceNode(value ASTNode) *ReferenceNode {
+	return &ReferenceNode{
+		value,
+	}
+}
+
 func newScope(outer *Scope) *Scope {
 	return &Scope{inner: make(map[string]ASTNode), outer: outer}
 }
@@ -542,7 +598,7 @@ func (p *Parser) ParseExpression() ASTNode {
 			// An identifier is now read and then two subsequent s expressions are parsed
 			switch p.currentChar {
 			case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-				'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_', '+', '-', '*', '/', '<', '>':
+				'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_', '+', '-', '*', '/', '%', '<', '>', '=':
 				identifier := p.readIdentifier()
 				if identifier == "def" {
 					// Implies this is a function defn
@@ -559,6 +615,7 @@ func (p *Parser) ParseExpression() ASTNode {
 					functionNode.arguments = p.parseFunctionArguments()
 					// parse the body(parse an s expression)
 					functionNode.body = p.parseFunctionBody()
+					p.nextChar()
 					return functionNode
 				}
 				if identifier == "if" {
@@ -573,6 +630,7 @@ func (p *Parser) ParseExpression() ASTNode {
 					p.skipWhitespace()
 					trueExpr := p.ParseExpression()
 					p.skipWhitespace()
+					fmt.Println("current char before parsing false: ", string(p.currentChar))
 					falseExpr := p.ParseExpression()
 					if p.currentChar != ')' {
 						panic(fmt.Sprintf("Expected ) got %s", string(p.currentChar)))
@@ -621,10 +679,14 @@ func (p *Parser) ParseExpression() ASTNode {
 			'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_':
 			ident := p.readIdentifier()
 			if p.currentChar != ' ' && p.currentChar != ')' {
-				panic("Should be a ' ' here")
+				panic("Should be a ' ' or ) here")
 			}
 			p.skipWhitespace()
 			return newIdentifierNode(ident)
+		case '&':
+			p.nextChar()
+			p.skipWhitespace()
+			return newReferenceNode(p.ParseExpression())
 		default:
 			fmt.Println(string(p.currentChar))
 			panic("Should'nt hit here")
@@ -638,10 +700,7 @@ func (p *Parser) Parse() []ASTNode {
 	for !p.isEndOfInput() {
 		astNodeArray = append(astNodeArray, p.ParseExpression())
 		p.skipWhitespace()
-		if p.currentChar != ')' {
-			panic(fmt.Sprintf("Expected ) got %s", string(p.currentChar)))
-		}
-		p.nextChar()
+		fmt.Println(string(p.currentChar))
 	}
 	return astNodeArray
 }
