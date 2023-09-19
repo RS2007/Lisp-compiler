@@ -205,7 +205,10 @@ func (i *IfNode) eval(scope *Scope) int {
 	if isCondTrue {
 		return i.trueExpr.eval(scope)
 	} else {
-		return i.falseExpr.eval(scope)
+		if i.falseExpr != nil {
+			return i.falseExpr.eval(scope)
+		}
+		return 0
 	}
 }
 
@@ -410,11 +413,15 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
 	*asm += fmt.Sprintf(`
 	iffalse:
 	`)
-	i.falseExpr.codegen(asm, falseSymbol, scope)
-	*asm += fmt.Sprintf(`
+	if i.falseExpr != nil {
+		i.falseExpr.codegen(asm, falseSymbol, scope)
+		*asm += fmt.Sprintf(`
 		store i64 %s, i64* %s, align 4
-		br label %%ifresult
 	`, falseSymbol, allocVariable)
+	}
+	*asm += fmt.Sprintf(`
+		br label %%ifresult
+	`)
 	*asm += fmt.Sprintf(`
 	ifresult:
 		%s = load i64,i64* %s, align 4
@@ -630,8 +637,14 @@ func (p *Parser) ParseExpression() ASTNode {
 					p.skipWhitespace()
 					trueExpr := p.ParseExpression()
 					p.skipWhitespace()
-					fmt.Println("current char before parsing false: ", string(p.currentChar))
-					falseExpr := p.ParseExpression()
+					var falseExpr ASTNode
+					fmt.Println("Before ", string(p.currentChar))
+					if p.currentChar == '(' || unicode.IsDigit(rune(p.currentChar)) {
+						falseExpr = p.ParseExpression()
+					} else {
+						falseExpr = nil
+					}
+					fmt.Println("After ", string(p.currentChar))
 					if p.currentChar != ')' {
 						panic(fmt.Sprintf("Expected ) got %s", string(p.currentChar)))
 					}

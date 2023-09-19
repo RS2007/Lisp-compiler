@@ -6,6 +6,31 @@ import (
 	"testing"
 )
 
+func TestWithoutElse(t *testing.T) {
+	type TestCase struct {
+		input     string
+		evaluated int
+	}
+	inputs := []TestCase{
+		{input: "(def is_small (x) (if (< x 5) 1))(def main() (is_small 3)", evaluated: 1},
+		{
+			input: "(def is_small (x) (if (< x 5) 1) 0)(def main() (is_small 7)", evaluated: 0,
+		},
+	}
+	for _, input := range inputs {
+		parser := newParser(input.input)
+		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
+		var evaluated int
+		expressions := parser.Parse()
+		for _, expression := range expressions {
+			evaluated = expression.eval(scope)
+		}
+		if evaluated != input.evaluated {
+			t.Errorf(fmt.Sprintf("Expected %d, got %d", input.evaluated, evaluated))
+		}
+	}
+}
+
 func TestFunctionEval(t *testing.T) {
 	type TestCase struct {
 		input     string
@@ -29,7 +54,7 @@ func TestFunctionEval(t *testing.T) {
 			evaluated = expression.eval(scope)
 		}
 		if evaluated != input.evaluated {
-			t.Errorf(fmt.Sprintf("Expected 5, got %d", evaluated))
+			t.Errorf(fmt.Sprintf("Expected %d, got %d", input.evaluated, evaluated))
 		}
 	}
 }

@@ -110,7 +110,7 @@ define i32 @main(){
 
 ### Printing error
 
-- [ ] support for array of SExpr in the function body
-- [ ] Parser is extremely shady, fix parser
-  - [ ] The `parseFunctionBody` method on the parser is extremely shady(poor implementation) , need to fix it
+- [x] support for array of SExpr in the function body
+- [x] Parser is extremely shady, fix parser
+  - [x] The `parseFunctionBody` method on the parser is extremely shady(poor implementation) , need to fix it
   - [ ] Fix other shabby parts of the code, add good asserts and code comments and unit tests

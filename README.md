@@ -32,8 +32,4 @@
 
 ### Demo
 
-
-
-
 https://github.com/RS2007/Lisp-compiler/assets/83483297/d844cdf1-64ee-46ef-ad99-fd742db9fe9e
-
