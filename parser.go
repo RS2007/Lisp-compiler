@@ -316,11 +316,21 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		}
 		pointerToIntSymbol := generateNextSymbol()
 		syscallNumSymbol := generateNextSymbol()
+		syscallStatusSymbol := generateNextSymbol()
+		checkIfSyscallSuccessSymbol := generateNextSymbol()
+		symbolForOne := generateNextSymbol()
 		*asm += fmt.Sprintf(`
 			%s = ptrtoint i64* %s to i64
 			%s = add i64 4,0
 			%s = call i64 asm sideeffect "svc #0x80","=r,{x0},{x1},{x2},{x16}" (i64 %s,i64 %s,i64 %s,i64 %s)
-		`, pointerToIntSymbol, referenceSymbol, syscallNumSymbol, symbol, outFdSymbol, pointerToIntSymbol, charNumSymbol, syscallNumSymbol)
+			%s = add i64 1,0
+			%s = icmp eq i64 %s,%s
+			br i1 %s,label %%syscallSuccess,label %%syscallFail
+			syscallSuccess:
+				ret i64 0
+			syscallFail:
+				%s = add i64 %s,0
+		`, pointerToIntSymbol, referenceSymbol, syscallNumSymbol, syscallStatusSymbol, outFdSymbol, pointerToIntSymbol, charNumSymbol, syscallNumSymbol, symbolForOne, checkIfSyscallSuccessSymbol, symbolForOne, syscallStatusSymbol, checkIfSyscallSuccessSymbol, symbol, syscallStatusSymbol)
 		return
 	}
 	currentSymbol := symbol
