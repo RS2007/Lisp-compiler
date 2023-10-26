@@ -250,7 +250,16 @@ func nextSymbolGenerator() func() string {
 	}
 }
 
+func ifLabelGenerator() func() [3]string {
+	count := 1
+	return func() [3]string {
+		count += 1
+		return [3]string{fmt.Sprintf("iftrue%d", count-1), fmt.Sprintf("iffalse%d", count-1), fmt.Sprintf("ifresult%d", count-1)}
+	}
+}
+
 var generateNextSymbol = nextSymbolGenerator()
+var generateNextIfLabel = ifLabelGenerator()
 
 var operandFunctioanMap = map[string]string{
 	"+": "add",
@@ -380,6 +389,7 @@ func (f *FunctionNode) codegen(asm *string, symbol string, scope *CompilerScope)
 	globalFunctionStore.store[f.name] = f
 	scope.inner[f.name] = f.name
 	argumentString := "("
+	generateNextIfLabel = ifLabelGenerator()
 	generateNextSymbol = nextSymbolGenerator()
 	symbol = generateNextSymbol()
 	for indx, arg := range f.arguments {
@@ -433,21 +443,22 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 	%s = alloca i64, align 4
 	`, allocVariable)
 	conditionSymbol := generateNextSymbol()
+	ifLabel := generateNextIfLabel()
 	i.condition.codegen(asm, conditionSymbol, scope)
 	*asm += fmt.Sprintf(`
-	br i1 %s,label %%iftrue,label %%iffalse
-	iftrue:
-	`, conditionSymbol)
+	br i1 %s,label %%%s,label %%%s
+	%s:
+	`, conditionSymbol, ifLabel[0], ifLabel[1], ifLabel[0])
 	trueSymbol := generateNextSymbol()
 	falseSymbol := generateNextSymbol()
 	i.trueExpr.codegen(asm, trueSymbol, scope)
 	*asm += fmt.Sprintf(`
 		store i64 %s, i64* %s, align 4
-		br label %%ifresult
-	`, trueSymbol, allocVariable)
+    br label %%%s
+	`, trueSymbol, allocVariable, ifLabel[2])
 	*asm += fmt.Sprintf(`
-	iffalse:
-	`)
+	%s:
+	`, ifLabel[1])
 	if i.falseExpr != nil {
 		i.falseExpr.codegen(asm, falseSymbol, scope)
 		*asm += fmt.Sprintf(`
@@ -455,12 +466,12 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 	`, falseSymbol, allocVariable)
 	}
 	*asm += fmt.Sprintf(`
-		br label %%ifresult
-	`)
+		br label %%%s
+	`, ifLabel[2])
 	*asm += fmt.Sprintf(`
-	ifresult:
+	%s:
 		%s = load i64,i64* %s, align 4
-	`, symbol, allocVariable)
+	`, ifLabel[2], symbol, allocVariable)
 }
 
 func (r *ReferenceNode) codegen(asm *string, symbol string, scope *CompilerScope) {
