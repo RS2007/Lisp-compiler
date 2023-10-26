@@ -52,8 +52,8 @@
 - [x] Add support for functions(parsing)
 - [x] Add codegen for function expressions
 - [x] Support LLVM IR
-- [ ] Compiling Fibonacci
-- [ ] LLVM syscalls
+- [x] Compiling Fibonacci
+- [x] LLVM syscalls
 - [ ] Infinite locals and params
 
 ## LLVM IR generation
@@ -114,3 +114,19 @@ define i32 @main(){
 - [x] Parser is extremely shady, fix parser
   - [x] The `parseFunctionBody` method on the parser is extremely shady(poor implementation) , need to fix it
   - [ ] Fix other shabby parts of the code, add good asserts and code comments and unit tests
+
+### Current Problems
+-  function arguments should be pushed to the stack  
+    - add the pointer symbol to the scope 
+    - on codegening for the identifier, load the value from the stack using the load instruction
+    - this gets rid of unnecessary adds in the generated llvm ir.
+- Support for all systemcalls (for arm mac)
+    - push all arguments to the stack
+    - maintain information about basic syscalls(number of arguments,maybe??)
+    - pop the values to the symbols in order
+    - generate the asm sideffect instruction
+- Add support for phi expressions in the if call, to keep track of the value
+    - instead of allocating space on the stack, generate the condition
+    - there should be a if label generator in case of nested ifs
+    - assign a phi with the true and false conditions and their corresponding return symbols
+

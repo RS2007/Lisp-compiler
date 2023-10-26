@@ -142,7 +142,6 @@ func TestParserSExpr(t *testing.T) {
 		{input: "(+ (/ 7 2) (* 2 3 4) )", output: 27},
 	}
 	for _, testCase := range testCases {
-		fmt.Println("testing input: ", testCase)
 		parser := newParser(testCase.input)
 		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
 		evaled := parser.ParseExpression().eval(scope)
