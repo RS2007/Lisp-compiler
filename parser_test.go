@@ -19,7 +19,7 @@ func TestWithoutElse(t *testing.T) {
 	}
 	for _, input := range inputs {
 		parser := newParser(input.input)
-		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
+		scope := &InterpreterScope{inner: make(map[string]ASTNode), outer: nil}
 		var evaluated int
 		expressions := parser.Parse()
 		for _, expression := range expressions {
@@ -47,7 +47,7 @@ func TestFunctionEval(t *testing.T) {
 	}
 	for _, input := range inputs {
 		parser := newParser(input.input)
-		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
+		scope := &InterpreterScope{inner: make(map[string]ASTNode), outer: nil}
 		var evaluated int
 		expressions := parser.Parse()
 		for _, expression := range expressions {
@@ -143,7 +143,7 @@ func TestParserSExpr(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		parser := newParser(testCase.input)
-		scope := &Scope{inner: make(map[string]ASTNode), outer: nil}
+		scope := &InterpreterScope{inner: make(map[string]ASTNode), outer: nil}
 		evaled := parser.ParseExpression().eval(scope)
 		output := testCase.output
 		if evaled != output {
