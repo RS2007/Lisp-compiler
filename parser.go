@@ -7,8 +7,8 @@ import (
 )
 
 type ASTNode interface {
-	eval(scope *Scope) int
-	codegen(asm *string, symbol string, scope *Scope)
+	eval(scope *InterpreterScope) int
+	codegen(asm *string, symbol string, scope *CompilerScope)
 }
 
 type IntegerNode struct {
@@ -24,7 +24,7 @@ type FunctionNode struct {
 	name      string
 	arguments []string
 	body      []ASTNode
-	scope     *Scope
+	scope     *InterpreterScope
 }
 
 type IdentifierNode struct {
@@ -41,6 +41,14 @@ type ReferenceNode struct {
 	value ASTNode
 }
 
+type FunctionStore struct {
+	store map[string]*FunctionNode
+}
+
+var basicBlockQueue = []string{}
+
+var globalFunctionStore = &FunctionStore{store: make(map[string]*FunctionNode)}
+
 var builtInOperations = []string{"+", "-", "*", "/", "%", "<", ">", "=", "&", "sys_write"}
 
 func Includes[T comparable](arr []T, target T) bool {
@@ -52,12 +60,17 @@ func Includes[T comparable](arr []T, target T) bool {
 	return false
 }
 
-type Scope struct {
+type InterpreterScope struct {
 	inner map[string]ASTNode
-	outer *Scope
+	outer *InterpreterScope
 }
 
-func (i *IntegerNode) eval(scope *Scope) int {
+type CompilerScope struct {
+	inner map[string]string
+	outer *CompilerScope
+}
+
+func (i *IntegerNode) eval(scope *InterpreterScope) int {
 	return i.value
 }
 
@@ -100,7 +113,7 @@ func builtinDiv(nums []int) int {
 	return sum
 }
 
-func evalBuiltin(operand string, arguments []ASTNode, scope *Scope) int {
+func evalBuiltin(operand string, arguments []ASTNode, scope *InterpreterScope) int {
 	evaluatedArgs := make([]int, 0)
 	for _, arg := range arguments {
 		evaluatedArg := arg.eval(scope)
@@ -109,7 +122,7 @@ func evalBuiltin(operand string, arguments []ASTNode, scope *Scope) int {
 	return BuiltinFuncMap[operand](evaluatedArgs)
 }
 
-func applyFunction(function *FunctionNode, functionEnv *Scope) int {
+func applyFunction(function *FunctionNode, functionEnv *InterpreterScope) int {
 	value := 0
 	for _, expr := range function.body {
 		value = expr.eval(functionEnv)
@@ -117,7 +130,7 @@ func applyFunction(function *FunctionNode, functionEnv *Scope) int {
 	return value
 }
 
-func (s *SExpr) eval(scope *Scope) int {
+func (s *SExpr) eval(scope *InterpreterScope) int {
 	if Includes(builtInOperations, s.operand) {
 		return evalBuiltin(s.operand, s.arguments, scope)
 	}
@@ -129,7 +142,7 @@ func (s *SExpr) eval(scope *Scope) int {
 	if !ok {
 		panic("Expected function node,got some nonsense")
 	}
-	extendedEnv := newScope(scope)
+	extendedEnv := newInterpreterScope(scope)
 	for indx := range s.arguments {
 		extendedEnv.inner[function.arguments[indx]] = &IntegerNode{value: s.arguments[indx].eval(scope)}
 	}
@@ -137,7 +150,7 @@ func (s *SExpr) eval(scope *Scope) int {
 	return applyFunction(function, extendedEnv)
 }
 
-func (f *FunctionNode) eval(scope *Scope) int {
+func (f *FunctionNode) eval(scope *InterpreterScope) int {
 	scope.inner[f.name] = f
 	value := 0
 	if f.name == "main" {
@@ -148,11 +161,11 @@ func (f *FunctionNode) eval(scope *Scope) int {
 	return value
 }
 
-func (r *ReferenceNode) eval(scope *Scope) int {
+func (r *ReferenceNode) eval(scope *InterpreterScope) int {
 	panic("Interpreter does not support references")
 }
 
-func (s *Scope) get(variable string) ASTNode {
+func (s *InterpreterScope) get(variable string) ASTNode {
 	if s.inner[variable] == nil {
 		if s.outer == nil {
 			return nil
@@ -162,14 +175,25 @@ func (s *Scope) get(variable string) ASTNode {
 	return s.inner[variable]
 }
 
-func (i *IdentifierNode) eval(scope *Scope) int {
+func (s *CompilerScope) get(variable string) (string, error) {
+	inner, innerOk := s.inner[variable]
+	if !innerOk {
+		if s.outer == nil {
+			return "", fmt.Errorf("variable not defined")
+		}
+		return s.outer.get(variable)
+	}
+	return inner, nil
+}
+
+func (i *IdentifierNode) eval(scope *InterpreterScope) int {
 	if scope.get(i.name) == nil {
 		panic(fmt.Sprintf("Compiler error: %s not found in scope", i.name))
 	}
 	return scope.get(i.name).eval(scope)
 }
 
-func (i *IntegerNode) codegen(asm *string, symbol string, scope *Scope) {
+func (i *IntegerNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 	*asm += fmt.Sprintf(`
 	%s = add i64 %d,0
 	`, symbol, i.value)
@@ -181,7 +205,7 @@ var (
 	systemCalls    = []string{"sys_write"}
 )
 
-func (i *IfNode) eval(scope *Scope) int {
+func (i *IfNode) eval(scope *InterpreterScope) int {
 	if !Includes(comparisionOps, i.condition.operand) {
 		panic("Should have a comparision operator in if condition")
 	}
@@ -228,7 +252,16 @@ func nextSymbolGenerator() func() string {
 	}
 }
 
+func ifLabelGenerator() func() [3]string {
+	count := 1
+	return func() [3]string {
+		count += 1
+		return [3]string{fmt.Sprintf("iftrue%d", count-1), fmt.Sprintf("iffalse%d", count-1), fmt.Sprintf("ifresult%d", count-1)}
+	}
+}
+
 var generateNextSymbol = nextSymbolGenerator()
+var generateNextIfLabel = ifLabelGenerator()
 
 var operandFunctioanMap = map[string]string{
 	"+": "add",
@@ -238,14 +271,10 @@ var operandFunctioanMap = map[string]string{
 	"%": "urem",
 }
 
-func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
+func (s *SExpr) codegen(asm *string, symbol string, scope *CompilerScope) {
 	if Includes(arithmeticOps, s.operand) {
 		if len(s.arguments) == 1 {
-			nextSymbol := generateNextSymbol()
-			s.arguments[0].codegen(asm, nextSymbol, scope)
-			*asm += fmt.Sprintf(`
-	%s = add i64 0,%s
-			`, symbol, nextSymbol)
+			s.arguments[0].codegen(asm, symbol, scope)
 			return
 		}
 		midpoint := getMidpointIndex[ASTNode](s.arguments)
@@ -341,9 +370,9 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 		arg.codegen(asm, symbol, scope)
 		symbol = generateNextSymbol()
 	}
-	function, ok := scope.get(s.operand).(*FunctionNode)
+	function, ok := globalFunctionStore.store[s.operand]
 	if !ok {
-		panic(fmt.Sprintf("Give function node pls: %s", s.operand))
+		panic(fmt.Sprintf("%s function not defined", s.operand))
 	}
 	argumentString := "("
 	for indx, arg := range argumentStack {
@@ -358,9 +387,11 @@ func (s *SExpr) codegen(asm *string, symbol string, scope *Scope) {
 	`, currentSymbol, s.operand, argumentString)
 }
 
-func (f *FunctionNode) codegen(asm *string, symbol string, scope *Scope) {
-	scope.inner[f.name] = f
+func (f *FunctionNode) codegen(asm *string, symbol string, scope *CompilerScope) {
+	globalFunctionStore.store[f.name] = f
+	scope.inner[f.name] = f.name
 	argumentString := "("
+	generateNextIfLabel = ifLabelGenerator()
 	generateNextSymbol = nextSymbolGenerator()
 	symbol = generateNextSymbol()
 	for indx, arg := range f.arguments {
@@ -372,12 +403,16 @@ func (f *FunctionNode) codegen(asm *string, symbol string, scope *Scope) {
 	argumentString += ")"
 	loadArgumentInstructions := ""
 	for _, arg := range f.arguments {
-		loadArgumentInstructions += (fmt.Sprintf(`
-	%s = add i64 `, symbol) + "%" + arg + ",0")
+		loadArgumentInstructions += fmt.Sprintf(`
+  %s = alloca i64, align 4
+	store i64 %%%s, i64* %s, align 4
+    `, symbol, arg, symbol)
+		scope.inner[arg] = symbol
 		symbol = generateNextSymbol()
 	}
 	*asm += fmt.Sprintf(`
 define i64 @%s%s{
+    entry:
 	`, f.name, argumentString)
 	*asm += fmt.Sprintf(` 
 	%s
@@ -397,48 +432,100 @@ define i64 @%s%s{
 	`, len(f.arguments)+1)
 }
 
-func (i *IdentifierNode) codegen(asm *string, symbol string, scope *Scope) {
-	*asm += fmt.Sprintf(`%s = add i64 %%`, symbol) + fmt.Sprintf(`%s,0
-	`, i.name)
+func (i *IdentifierNode) codegen(asm *string, symbol string, scope *CompilerScope) {
+	compilerSymbol, err := scope.get(i.name)
+	if err != nil {
+		panic(fmt.Sprintf("Symbol not in scope %s", i.name))
+	}
+	*asm += fmt.Sprintf(`%s = load i64 ,i64* %s,align 4`, symbol, compilerSymbol)
 }
 
-func (i *IfNode) codegen(asm *string, symbol string, scope *Scope) {
+func (i *IfNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 	allocVariable := generateNextSymbol()
 	*asm += fmt.Sprintf(`
 	%s = alloca i64, align 4
 	`, allocVariable)
+
 	conditionSymbol := generateNextSymbol()
+	ifLabel := generateNextIfLabel()
+
 	i.condition.codegen(asm, conditionSymbol, scope)
-	*asm += fmt.Sprintf(`
-	br i1 %s,label %%iftrue,label %%iffalse
-	iftrue:
-	`, conditionSymbol)
+
+	if i.falseExpr != nil {
+		*asm += fmt.Sprintf(`
+	br i1 %s,label %%%s,label %%%s
+	%s:
+	`, conditionSymbol, ifLabel[0], ifLabel[1], ifLabel[0])
+	} else {
+		*asm += fmt.Sprintf(`
+	br i1 %s,label %%%s,label %%%s
+	%s:
+	`, conditionSymbol, ifLabel[0], ifLabel[2], ifLabel[0])
+	}
+	basicBlockQueue = append(basicBlockQueue, ifLabel[0])
+
 	trueSymbol := generateNextSymbol()
 	falseSymbol := generateNextSymbol()
+
 	i.trueExpr.codegen(asm, trueSymbol, scope)
+
 	*asm += fmt.Sprintf(`
-		store i64 %s, i64* %s, align 4
-		br label %%ifresult
-	`, trueSymbol, allocVariable)
-	*asm += fmt.Sprintf(`
-	iffalse:
-	`)
+    br label %%%s
+	`, ifLabel[2])
+
 	if i.falseExpr != nil {
+		*asm += fmt.Sprintf(`
+	%s:
+	`, ifLabel[1])
 		i.falseExpr.codegen(asm, falseSymbol, scope)
 		*asm += fmt.Sprintf(`
-		store i64 %s, i64* %s, align 4
-	`, falseSymbol, allocVariable)
+      br label %%%s
+  `, ifLabel[2])
+		basicBlockQueue = append(basicBlockQueue, ifLabel[1])
 	}
-	*asm += fmt.Sprintf(`
-		br label %%ifresult
-	`)
-	*asm += fmt.Sprintf(`
-	ifresult:
-		%s = load i64,i64* %s, align 4
-	`, symbol, allocVariable)
+
+	if i.falseExpr == nil {
+
+		if len(basicBlockQueue) == 0 {
+			panic("block queue cannot be empty")
+		}
+
+		phiTrueLabel := basicBlockQueue[len(basicBlockQueue)-1]
+		basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+		var phiFalseLabel string
+		if len(basicBlockQueue) == 0 {
+			phiFalseLabel = "entry"
+		} else {
+
+			phiFalseLabel = basicBlockQueue[len(basicBlockQueue)-1]
+			basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+		}
+		*asm += fmt.Sprintf(`
+	%s:
+    %s = phi i64 [%s,%%%s],[0,%%%s]
+	`, ifLabel[2], symbol, trueSymbol, phiTrueLabel, phiFalseLabel)
+	} else {
+		if len(basicBlockQueue) == 0 {
+			panic("block queue cannot be empty")
+		}
+
+		phiFalseLabel := basicBlockQueue[len(basicBlockQueue)-1]
+		basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+		if len(basicBlockQueue) == 0 {
+			panic("block queue cannot be empty")
+		}
+		phiTrueLabel := basicBlockQueue[len(basicBlockQueue)-1]
+		basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+
+		*asm += fmt.Sprintf(`
+	%s:
+    %s = phi i64 [%s,%%%s],[%s,%%%s]
+	`, ifLabel[2], symbol, trueSymbol, phiTrueLabel, falseSymbol, phiFalseLabel)
+	}
+	basicBlockQueue = append(basicBlockQueue, ifLabel[2])
 }
 
-func (r *ReferenceNode) codegen(asm *string, symbol string, scope *Scope) {
+func (r *ReferenceNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 	valueSymbol := generateNextSymbol()
 	r.value.codegen(asm, valueSymbol, scope)
 	*asm += fmt.Sprintf(`
@@ -566,7 +653,7 @@ func newFunctionNode(name string) *FunctionNode {
 		name:      name,
 		arguments: nil,
 		body:      nil,
-		scope:     &Scope{inner: make(map[string]ASTNode), outer: nil},
+		scope:     &InterpreterScope{inner: make(map[string]ASTNode), outer: nil},
 	}
 }
 
@@ -582,8 +669,12 @@ func newReferenceNode(value ASTNode) *ReferenceNode {
 	}
 }
 
-func newScope(outer *Scope) *Scope {
-	return &Scope{inner: make(map[string]ASTNode), outer: outer}
+func newInterpreterScope(outer *InterpreterScope) *InterpreterScope {
+	return &InterpreterScope{inner: make(map[string]ASTNode), outer: outer}
+}
+
+func newCompilerScope(outer *CompilerScope) *CompilerScope {
+	return &CompilerScope{inner: make(map[string]string), outer: outer}
 }
 
 func (p *Parser) readIdentifier() string {
@@ -648,7 +739,7 @@ func (p *Parser) ParseExpression() ASTNode {
 					trueExpr := p.ParseExpression()
 					p.skipWhitespace()
 					var falseExpr ASTNode
-					if p.currentChar == '(' || unicode.IsDigit(rune(p.currentChar)) {
+					if p.currentChar == '(' || unicode.IsDigit(rune(p.currentChar)) || unicode.IsLetter(rune(p.currentChar)) {
 						falseExpr = p.ParseExpression()
 					} else {
 						falseExpr = nil

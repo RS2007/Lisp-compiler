@@ -111,8 +111,9 @@ func main() {
 	asm := ""
 	symbol := "%sym1"
 	parsed := parser.Parse()
-	scope := newScope(nil)
+
 	if mode == "interpret" {
+		scope := newInterpreterScope(nil)
 		var value int
 		for _, parsedExpr := range parsed {
 			value = parsedExpr.eval(scope)
@@ -120,6 +121,7 @@ func main() {
 		fmt.Println(value)
 		return
 	} else {
+		scope := newCompilerScope(nil)
 		for _, parsedExpr := range parsed {
 			parsedExpr.codegen(&asm, symbol, scope)
 			asm += "\n"

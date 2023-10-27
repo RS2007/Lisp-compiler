@@ -32,11 +32,3 @@ var suffix = `
 	mov X16,#1
 	svc #0x80
 `
-
-func Codegen(root ASTNode) string {
-	symbol := "%%sym0"
-	asm := ""
-	scope := newScope(nil)
-	root.codegen(&asm, symbol, scope)
-	return asm
-}
