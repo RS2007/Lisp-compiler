@@ -45,6 +45,8 @@ type FunctionStore struct {
 	store map[string]*FunctionNode
 }
 
+var basicBlockQueue = []string{}
+
 var globalFunctionStore = &FunctionStore{store: make(map[string]*FunctionNode)}
 
 var builtInOperations = []string{"+", "-", "*", "/", "%", "<", ">", "=", "&", "sys_write"}
@@ -410,6 +412,7 @@ func (f *FunctionNode) codegen(asm *string, symbol string, scope *CompilerScope)
 	}
 	*asm += fmt.Sprintf(`
 define i64 @%s%s{
+    entry:
 	`, f.name, argumentString)
 	*asm += fmt.Sprintf(` 
 	%s
@@ -442,36 +445,71 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 	*asm += fmt.Sprintf(`
 	%s = alloca i64, align 4
 	`, allocVariable)
+
 	conditionSymbol := generateNextSymbol()
 	ifLabel := generateNextIfLabel()
+
 	i.condition.codegen(asm, conditionSymbol, scope)
-	*asm += fmt.Sprintf(`
+
+	if i.falseExpr != nil {
+		*asm += fmt.Sprintf(`
 	br i1 %s,label %%%s,label %%%s
 	%s:
 	`, conditionSymbol, ifLabel[0], ifLabel[1], ifLabel[0])
+	} else {
+		*asm += fmt.Sprintf(`
+	br i1 %s,label %%%s,label %%%s
+	%s:
+	`, conditionSymbol, ifLabel[0], ifLabel[2], ifLabel[0])
+	}
+	basicBlockQueue = append(basicBlockQueue, ifLabel[0])
+
 	trueSymbol := generateNextSymbol()
 	falseSymbol := generateNextSymbol()
+
 	i.trueExpr.codegen(asm, trueSymbol, scope)
+
 	*asm += fmt.Sprintf(`
-		store i64 %s, i64* %s, align 4
     br label %%%s
-	`, trueSymbol, allocVariable, ifLabel[2])
-	*asm += fmt.Sprintf(`
+	`, ifLabel[2])
+
+	fmt.Println("i.falseExpr = ", i.falseExpr)
+	if i.falseExpr != nil {
+		*asm += fmt.Sprintf(`
 	%s:
 	`, ifLabel[1])
-	if i.falseExpr != nil {
 		i.falseExpr.codegen(asm, falseSymbol, scope)
 		*asm += fmt.Sprintf(`
-		store i64 %s, i64* %s, align 4
-	`, falseSymbol, allocVariable)
+      br label %%%s
+  `, ifLabel[2])
+		basicBlockQueue = append(basicBlockQueue, ifLabel[1])
 	}
-	*asm += fmt.Sprintf(`
-		br label %%%s
-	`, ifLabel[2])
-	*asm += fmt.Sprintf(`
+
+	if i.falseExpr == nil {
+
+		*asm += fmt.Sprintf(`
 	%s:
-		%s = load i64,i64* %s, align 4
-	`, ifLabel[2], symbol, allocVariable)
+    %s = phi i64 [%s,%%%s],[0,%%entry]
+	`, ifLabel[2], symbol, trueSymbol, ifLabel[0])
+	} else {
+		if len(basicBlockQueue) == 0 {
+			panic("block queue cannot be empty")
+		}
+
+		phiFalseLabel := basicBlockQueue[len(basicBlockQueue)-1]
+		basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+		if len(basicBlockQueue) == 0 {
+			panic("block queue cannot be empty")
+		}
+		phiTrueLabel := basicBlockQueue[len(basicBlockQueue)-1]
+		basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+
+		*asm += fmt.Sprintf(`
+	%s:
+    %s = phi i64 [%s,%%%s],[%s,%%%s]
+	`, ifLabel[2], symbol, trueSymbol, phiTrueLabel, falseSymbol, phiFalseLabel)
+	}
+	basicBlockQueue = append(basicBlockQueue, ifLabel[2])
 }
 
 func (r *ReferenceNode) codegen(asm *string, symbol string, scope *CompilerScope) {
@@ -688,7 +726,7 @@ func (p *Parser) ParseExpression() ASTNode {
 					trueExpr := p.ParseExpression()
 					p.skipWhitespace()
 					var falseExpr ASTNode
-					if p.currentChar == '(' || unicode.IsDigit(rune(p.currentChar)) {
+					if p.currentChar == '(' || unicode.IsDigit(rune(p.currentChar)) || unicode.IsLetter(rune(p.currentChar)) {
 						falseExpr = p.ParseExpression()
 					} else {
 						falseExpr = nil
