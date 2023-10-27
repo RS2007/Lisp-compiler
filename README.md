@@ -40,4 +40,6 @@ https://github.com/RS2007/Lisp-compiler/assets/83483297/4f94ba7f-a707-4663-805e-
 
 
 
-> Warning: using an if expression without an else while implicitly assume the else block returns 0
+> [!Warning]
+> Using an If expression without an else expression will implicitly assume the else block expression to be 0.
+
