@@ -473,7 +473,6 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *CompilerScope) {
     br label %%%s
 	`, ifLabel[2])
 
-	fmt.Println("i.falseExpr = ", i.falseExpr)
 	if i.falseExpr != nil {
 		*asm += fmt.Sprintf(`
 	%s:
@@ -487,10 +486,24 @@ func (i *IfNode) codegen(asm *string, symbol string, scope *CompilerScope) {
 
 	if i.falseExpr == nil {
 
+		if len(basicBlockQueue) == 0 {
+			panic("block queue cannot be empty")
+		}
+
+		phiTrueLabel := basicBlockQueue[len(basicBlockQueue)-1]
+		basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+		var phiFalseLabel string
+		if len(basicBlockQueue) == 0 {
+			phiFalseLabel = "entry"
+		} else {
+
+			phiFalseLabel = basicBlockQueue[len(basicBlockQueue)-1]
+			basicBlockQueue = basicBlockQueue[:len(basicBlockQueue)-1]
+		}
 		*asm += fmt.Sprintf(`
 	%s:
-    %s = phi i64 [%s,%%%s],[0,%%entry]
-	`, ifLabel[2], symbol, trueSymbol, ifLabel[0])
+    %s = phi i64 [%s,%%%s],[0,%%%s]
+	`, ifLabel[2], symbol, trueSymbol, phiTrueLabel, phiFalseLabel)
 	} else {
 		if len(basicBlockQueue) == 0 {
 			panic("block queue cannot be empty")
