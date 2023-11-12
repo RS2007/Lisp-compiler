@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"fmt"
@@ -18,12 +18,12 @@ func TestWithoutElse(t *testing.T) {
 		},
 	}
 	for _, input := range inputs {
-		parser := newParser(input.input)
+		parser := NewParser(input.input)
 		scope := &InterpreterScope{inner: make(map[string]ASTNode), outer: nil}
 		var evaluated int
 		expressions := parser.Parse()
 		for _, expression := range expressions {
-			evaluated = expression.eval(scope)
+			evaluated = expression.Eval(scope)
 		}
 		if evaluated != input.evaluated {
 			t.Errorf(fmt.Sprintf("Expected %d, got %d", input.evaluated, evaluated))
@@ -46,12 +46,12 @@ func TestFunctionEval(t *testing.T) {
 		{input: "(def fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))) (def main () (fib 8))", evaluated: 21},
 	}
 	for _, input := range inputs {
-		parser := newParser(input.input)
+		parser := NewParser(input.input)
 		scope := &InterpreterScope{inner: make(map[string]ASTNode), outer: nil}
 		var evaluated int
 		expressions := parser.Parse()
 		for _, expression := range expressions {
-			evaluated = expression.eval(scope)
+			evaluated = expression.Eval(scope)
 		}
 		if evaluated != input.evaluated {
 			t.Errorf(fmt.Sprintf("Expected %d, got %d", input.evaluated, evaluated))
@@ -61,7 +61,7 @@ func TestFunctionEval(t *testing.T) {
 
 func TestParserIfExpr(t *testing.T) {
 	input := "(def main() (if (< n 2) n (+ 1 n)))"
-	parser := newParser(input)
+	parser := NewParser(input)
 	function, ok := parser.ParseExpression().(*FunctionNode)
 	if !ok {
 		panic("Expected function node")
@@ -104,7 +104,7 @@ func TestParserFunctions(t *testing.T) {
 		{input: "(def plus_two (a) (+ a 2))", name: "plus_two", arguments: []string{"a"}, bodyLength: 1},
 	}
 	for _, input := range inputs {
-		parser := newParser(input.input)
+		parser := NewParser(input.input)
 		node := parser.ParseExpression()
 		functionNode, ok := node.(*FunctionNode)
 		if !ok {
@@ -142,9 +142,9 @@ func TestParserSExpr(t *testing.T) {
 		{input: "(+ (/ 7 2) (* 2 3 4) )", output: 27},
 	}
 	for _, testCase := range testCases {
-		parser := newParser(testCase.input)
+		parser := NewParser(testCase.input)
 		scope := &InterpreterScope{inner: make(map[string]ASTNode), outer: nil}
-		evaled := parser.ParseExpression().eval(scope)
+		evaled := parser.ParseExpression().Eval(scope)
 		output := testCase.output
 		if evaled != output {
 			t.Errorf("Evaluation incorrect, expected %d, got %d\n", evaled, output)
