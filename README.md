@@ -1,5 +1,5 @@
 # Lisp-compiler
-![Go Tests](https://github.com/<your-username>/<your-repo>/actions/workflows/go-tests.yml/badge.svg)
+![Go Tests](https://github.com/RS2007/Lisp-compiler/actions/workflows/test.yml/badge.svg)
 
 
 - Learning about llvm ir by building a lisp compiler.
