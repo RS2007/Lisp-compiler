@@ -115,7 +115,7 @@ func (s *SExpr) Codegen(asm *string, symbol string, scope *CompilerScope) {
 		syscallStatusSymbol := generateNextSymbol()
 		checkIfSyscallSuccessSymbol := generateNextSymbol()
 		symbolForOne := generateNextSymbol()
-		if runtime.GOOS == "darwin"{
+		if runtime.GOOS == "darwin" {
 			*asm += fmt.Sprintf(`
 				%s = ptrtoint i64* %s to i64
 				%s = add i64 4,0
@@ -128,7 +128,7 @@ func (s *SExpr) Codegen(asm *string, symbol string, scope *CompilerScope) {
 				syscallFail:
 					%s = add i64 %s,0
 			`, pointerToIntSymbol, referenceSymbol, syscallNumSymbol, syscallStatusSymbol, outFdSymbol, pointerToIntSymbol, charNumSymbol, syscallNumSymbol, symbolForOne, checkIfSyscallSuccessSymbol, symbolForOne, syscallStatusSymbol, checkIfSyscallSuccessSymbol, symbol, syscallStatusSymbol)
-		} else{
+		} else {
 			*asm += fmt.Sprintf(`
 				%s = ptrtoint i64* %s to i64
 				%s = add i64 1,0
@@ -140,7 +140,7 @@ func (s *SExpr) Codegen(asm *string, symbol string, scope *CompilerScope) {
 					ret i64 0
 				syscallFail:
 					%s = add i64 %s,0
-			`, pointerToIntSymbol, referenceSymbol, syscallNumSymbol, syscallStatusSymbol,syscallNumSymbol, outFdSymbol, pointerToIntSymbol, charNumSymbol,  symbolForOne, checkIfSyscallSuccessSymbol, symbolForOne, syscallStatusSymbol, checkIfSyscallSuccessSymbol, symbol, syscallStatusSymbol)
+			`, pointerToIntSymbol, referenceSymbol, syscallNumSymbol, syscallStatusSymbol, syscallNumSymbol, outFdSymbol, pointerToIntSymbol, charNumSymbol, symbolForOne, checkIfSyscallSuccessSymbol, symbolForOne, syscallStatusSymbol, checkIfSyscallSuccessSymbol, symbol, syscallStatusSymbol)
 		}
 		return
 	}

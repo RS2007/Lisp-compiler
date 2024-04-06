@@ -1,4 +1,6 @@
 # Lisp-compiler
+![Go Tests](https://github.com/<your-username>/<your-repo>/actions/workflows/go-tests.yml/badge.svg)
+
 
 - Learning about llvm ir by building a lisp compiler.
 - Currently supports an interpret and compile mode.

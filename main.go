@@ -11,8 +11,8 @@ import (
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println(`
-			Usage: lisp-compiler <mode> <input-path>
-			mode: interpret,compile, default: compile
+Usage: lisp-compiler <mode> <input-path>
+mode: interpret,compile, default: compile
 		`)
 		return
 	}

@@ -1,0 +1,33 @@
+name: Go Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+        
+    - name: Run tests
+      run: go test ./core
+      
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      
+    - name: Check coverage
+      run: |
+        if [ $(go tool cover -func=./core/coverage.out | grep total | awk '{print $3}' | sed 's/%//') -lt 80 ]; then
+          echo "Code coverage is below 80%!"
+          exit 1
+        fi
